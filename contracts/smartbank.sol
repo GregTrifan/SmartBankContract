@@ -29,7 +29,6 @@ contract SmartBankAccount {
     }
     
     mapping(address => uint) balances;
-    mapping(address => uint) depositTimestamps;
     
     receive() external payable{}
     /**
