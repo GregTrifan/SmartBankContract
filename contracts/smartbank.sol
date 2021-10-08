@@ -9,7 +9,7 @@ interface cETH {
     //@dev functions from Compound that are going to be used
     function mint() external payable; // to deposit to Compound
     function redeem(uint redeemTokens) external returns (uint); // Redeem ETH from Compound
-    
+    function redeemUnderlying(uint redeemAmount) external returns (uint); // Redeem specified Amount
     // These 2 determine the amount you're able to withdraw
     function exchangeRateStored() external view returns (uint);
     function balanceOf(address owner) external view returns (uint256 balance);
@@ -32,18 +32,25 @@ contract SmartBankAccount {
     mapping(address => uint) depositTimestamps;
     
     receive() external payable{}
-    // Deposit Ether
+    /**
+    * @dev Deposit Ether
+    */
     function addBalance() public payable {
         _mint(msg.value);
     }
     
-    // Get withdrawable ETH
+    /**
+    * @dev Retrieves the amount of stored Ether
+    */
     function getBalance(address userAddress) public view returns(uint) {
         // Get amount of cETH and calculate received ETH based on the exchange rate
         return balances[userAddress]*ceth.exchangeRateStored()/1e18;
         
     }
     
+    /**
+    * @dev Mints an specific amount of cEth
+    */
     function _mint(uint amountEther) internal {
         
         uint256 cEthBeforeMint = ceth.balanceOf(address(this));
@@ -60,7 +67,10 @@ contract SmartBankAccount {
     function getExchangeRate() public view returns(uint256){
         return ceth.exchangeRateStored();
     }
-    // Withdraw Ether
+
+    /**
+    * @dev Withdraws all the Ether
+    */
     function withdraw() public payable {
         address payable transferTo = payable(msg.sender); // get payable to transfer towards
         ceth.redeem(balances[msg.sender]); // Redeem that cETH
@@ -68,5 +78,34 @@ contract SmartBankAccount {
         totalContractBalance -= balances[msg.sender];
         balances[msg.sender] = 0;
         transferTo.transfer(amountToWithdraw);
+    }
+
+    /**
+    * @dev Withdraw a specific amount of Ether
+    */
+    function withdrawAmount(uint amountRequested) public payable {
+        require(amountRequested <= getBalance(msg.sender), "Your balance is smaller than the requested amount");
+        address payable transferTo = payable(msg.sender); // get payable to transfer to sender's address
+        
+        uint256 cEthWithdrawn = _withdrawCEther(amountRequested);
+
+        totalContractBalance -= cEthWithdrawn;
+        balances[msg.sender] -= cEthWithdrawn;
+        transferTo.transfer(amountRequested);
+        
+    }
+
+    /**
+    * @dev Redeems cETH for withdraw
+    * @return Withdrawn cETH
+    */
+    function _withdrawCEther(uint256 _amountOfEth) internal returns (uint256) {
+        uint256 cEthContractBefore = ceth.balanceOf(address(this));
+        ceth.redeemUnderlying(_amountOfEth);
+        uint256 cEthContractAfter = ceth.balanceOf(address(this));
+
+        uint256 cEthWithdrawn = cEthContractBefore - cEthContractAfter;
+
+        return cEthWithdrawn;
     }
 }
